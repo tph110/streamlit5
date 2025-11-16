@@ -6,3 +6,4 @@ Pillow==10.4.0
 numpy==1.26.4 
 requests>=2.31.0
 scipy>=1.11.0  
+plotly>=5.0.0
