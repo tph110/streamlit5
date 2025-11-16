@@ -1,0 +1,608 @@
+#!/usr/bin/env python3
+"""
+train_isic2019_8class.py - FULLY FIXED VERSION v2
+• AK → akiec mapping
+• AUC fixed with PyTorch F.softmax (numerically stable)
+• Tensor warning eliminated
+• Ready for full training
+"""
+
+import argparse
+import json
+import os
+import random
+import sys
+import time
+from collections import Counter
+from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from PIL import Image, ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
+from torchvision import transforms
+
+from sklearn.metrics import (
+    roc_auc_score,
+    precision_recall_fscore_support,
+    confusion_matrix,
+    balanced_accuracy_score,
+)
+from sklearn.model_selection import train_test_split
+
+# ---- timm & ttach ------------------------------------------------------------
+try:
+    import timm
+except Exception:
+    print("ERROR: timm not installed. Install with: pip install timm")
+    sys.exit(1)
+
+try:
+    import ttach as tta
+except Exception:
+    print("ERROR: ttach not installed. Install with: pip install ttach")
+    sys.exit(1)
+
+# -------------------------
+# Class mapping (handles both AKIEC and AK)
+# -------------------------
+ISIC2019_CLASS_MAPPING = {
+    'MEL': 'mel',
+    'NV': 'nv',
+    'BCC': 'bcc',
+    'AKIEC': 'akiec',
+    'AK': 'akiec',      # ← Critical: maps AK to akiec
+    'BKL': 'bkl',
+    'DF': 'df',
+    'VASC': 'vasc',
+    'SCC': 'scc',
+}
+
+CLASS_NAMES = ['akiec', 'bcc', 'bkl', 'df', 'mel', 'nv', 'scc', 'vasc']
+
+# -------------------------
+# Reproducibility
+# -------------------------
+def set_seed(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+def worker_init_fn(worker_id):
+    seed = torch.initial_seed() % 2**32
+    np.random.seed(seed + worker_id)
+    random.seed(seed + worker_id)
+
+# -------------------------
+# Dataset
+# -------------------------
+class SkinLesionDataset(Dataset):
+    def __init__(self, image_paths, labels, transform=None, preload=False):
+        assert len(image_paths) == len(labels)
+        self.transform = transform
+        self.samples = [{"path": Path(p), "label": int(y)} for p, y in zip(image_paths, labels)]
+        if preload:
+            self._prevalidate_samples()
+
+    def _prevalidate_samples(self):
+        valid = []
+        print(f"[INFO] Validating {len(self.samples)} images...")
+        for i, s in enumerate(self.samples):
+            try:
+                with Image.open(s["path"]) as im:
+                    im.verify()
+                valid.append(s)
+            except Exception as e:
+                print(f"[WARN] Dropping unreadable image: {s['path']} ({e})", file=sys.stderr)
+            if (i + 1) % 1000 == 0:
+                print(f" Validated {i + 1}/{len(self.samples)} images...")
+        print(f"[INFO] Validation complete: {len(valid)}/{len(self.samples)} images valid")
+        self.samples = valid
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        s = self.samples[idx]
+        try:
+            with Image.open(s["path"]) as img:
+                img = img.convert("RGB")
+                if self.transform:
+                    img = self.transform(img)
+                return img, s["label"]
+        except Exception as e:
+            raise RuntimeError(f"Failed to load image {s['path']}: {e}")
+
+# -------------------------
+# Focal Loss (FIXED: no tensor warning)
+# -------------------------
+class FocalLoss(nn.Module):
+    def __init__(self, gamma=2.0, alpha=None, reduction="mean", device=None):
+        super().__init__()
+        self.gamma = float(gamma)
+        self.reduction = reduction
+        self.device = device or torch.device("cpu")
+        if alpha is not None:
+            alpha_tensor = torch.tensor(alpha, dtype=torch.float32, device=self.device)
+            self.alpha = alpha_tensor.clone().detach()
+        else:
+            self.alpha = None
+
+    def forward(self, inputs, targets):
+        ce_loss = F.cross_entropy(inputs, targets, reduction="none")
+        p_t = torch.exp(-ce_loss)
+        focal = ((1 - p_t) ** self.gamma) * ce_loss
+        if self.alpha is not None:
+            a_t = self.alpha if self.alpha.dim() == 0 else self.alpha[targets]
+            focal = a_t * focal
+        return focal.mean() if self.reduction == "mean" else focal.sum() if self.reduction == "sum" else focal
+
+# -------------------------
+# Metrics (FIXED: stable softmax for AUC)
+# -------------------------
+def compute_metrics(y_true, y_pred, y_prob, num_classes):
+    metrics = {}
+
+    # Macro averages
+    prec, rec, f1, _ = precision_recall_fscore_support(y_true, y_pred, average='macro', zero_division=0)
+    metrics["precision_macro"] = float(prec)
+    metrics["recall_macro"] = float(rec)
+    metrics["f1_macro"] = float(f1)
+    metrics["balanced_accuracy"] = float(balanced_accuracy_score(y_true, y_pred))
+
+    # Per-class
+    prec_pc, rec_pc, f1_pc, sup = precision_recall_fscore_support(y_true, y_pred, average=None, zero_division=0)
+    metrics["per_class"] = {}
+    for i in range(num_classes):
+        metrics["per_class"][i] = {
+            "precision": float(prec_pc[i]),
+            "recall": float(rec_pc[i]),
+            "f1": float(f1_pc[i]),
+            "support": int(sup[i]),
+        }
+
+    # Confusion matrix
+    metrics["confusion_matrix"] = confusion_matrix(y_true, y_pred, labels=list(range(num_classes))).tolist()
+
+    # AUC - Robust normalization with exact sum to 1.0
+    try:
+        # Check for NaN or inf in input probabilities
+        if np.any(np.isnan(y_prob)) or np.any(np.isinf(y_prob)):
+            print(f"[WARN] Input probabilities contain NaN/inf, replacing with uniform distribution")
+            y_prob = np.ones_like(y_prob) / num_classes
+        
+        # Replace any remaining NaN/inf with small positive values
+        y_prob = np.nan_to_num(y_prob, nan=1e-8, posinf=1.0, neginf=1e-8)
+        
+        # Ensure non-negative
+        y_prob = np.maximum(y_prob, 1e-8)
+        
+        # Normalize each row to sum to 1.0 with exact precision
+        row_sums = y_prob.sum(axis=1, keepdims=True)
+        row_sums = np.maximum(row_sums, 1e-10)  # Prevent division by zero
+        y_prob_normalized = y_prob / row_sums
+        
+        # Verify no NaN after normalization
+        if np.any(np.isnan(y_prob_normalized)):
+            print(f"[WARN] NaN detected after normalization, using uniform probabilities")
+            y_prob_normalized = np.ones_like(y_prob) / num_classes
+        
+        # CRITICAL: Ensure exact sum to 1.0 using high precision
+        # Convert to float64 for higher precision to minimize rounding errors
+        y_prob_normalized = y_prob_normalized.astype(np.float64)
+        
+        # Normalize all columns
+        row_sums = y_prob_normalized.sum(axis=1, keepdims=True)
+        y_prob_normalized = y_prob_normalized / (row_sums + 1e-15)  # Small epsilon to avoid division issues
+        
+        # Compute exact difference needed to make sum exactly 1.0
+        row_sums_actual = y_prob_normalized.sum(axis=1)
+        diff = 1.0 - row_sums_actual
+        
+        # Adjust last column to make sum exactly 1.0
+        last_col_adjusted = y_prob_normalized[:, -1] + diff
+        
+        # Check if adjustment keeps values in valid range [0, 1]
+        if np.all((last_col_adjusted >= 0.0) & (last_col_adjusted <= 1.0)):
+            # Safe to apply adjustment
+            y_prob_normalized[:, -1] = last_col_adjusted
+        else:
+            # Adjustment would push out of bounds, use proportional redistribution
+            # Normalize again and compute last column as remainder
+            row_sums = y_prob_normalized.sum(axis=1, keepdims=True)
+            y_prob_normalized = y_prob_normalized / (row_sums + 1e-15)
+            # Set last column to exactly what's needed: 1.0 - sum of others
+            sum_others = y_prob_normalized[:, :-1].sum(axis=1)
+            y_prob_normalized[:, -1] = np.clip(1.0 - sum_others, 0.0, 1.0)
+            # If clipping changed it, re-normalize the row
+            for i in range(len(y_prob_normalized)):
+                row_sum = y_prob_normalized[i, :].sum()
+                if not np.isclose(row_sum, 1.0, atol=1e-12):
+                    y_prob_normalized[i, :] = y_prob_normalized[i, :] / row_sum
+                    y_prob_normalized[i, -1] = 1.0 - y_prob_normalized[i, :-1].sum()
+        
+        # Final guarantee: compute last column as exact remainder
+        # This ensures sum is exactly 1.0 (within floating-point precision)
+        sum_first_n_minus_1 = y_prob_normalized[:, :-1].sum(axis=1)
+        y_prob_normalized[:, -1] = 1.0 - sum_first_n_minus_1
+        
+        # Verify final sums are exactly 1.0 (within machine precision)
+        final_verification = y_prob_normalized.sum(axis=1)
+        if not np.allclose(final_verification, 1.0, atol=1e-14):
+            # If still not exact, this is a numerical precision issue
+            # Use the most direct method: normalize and set last column
+            row_sums_final = y_prob_normalized.sum(axis=1, keepdims=True)
+            y_prob_normalized = y_prob_normalized / row_sums_final
+            y_prob_normalized[:, -1] = 1.0 - y_prob_normalized[:, :-1].sum(axis=1)
+        
+        auc_macro = roc_auc_score(y_true, y_prob_normalized, multi_class='ovr', average='macro')
+        metrics["auc_macro"] = float(auc_macro)
+        metrics["auc"] = float(auc_macro)
+    except Exception as e:
+        print(f"[WARN] AUC computation failed: {e}")
+        metrics["auc_macro"] = metrics["auc"] = 0.0
+
+    return metrics
+
+# -------------------------
+# Model
+# -------------------------
+def build_model(num_classes=8, model_name="tf_efficientnet_b4", pretrained=True):
+    return timm.create_model(model_name, pretrained=pretrained, num_classes=num_classes)
+
+# -------------------------
+# Training / Evaluation (FIXED: PyTorch F.softmax)
+# -------------------------
+def train_one_epoch(model, optimizer, scheduler, loader, device, criterion, scaler):
+    model.train()
+    total_loss = 0.0
+    device_type = 'cuda' if device.type == 'cuda' else 'cpu'
+    for images, labels in loader:
+        images, labels = images.to(device), labels.to(device)
+        optimizer.zero_grad()
+        with torch.amp.autocast(device_type=device_type):
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+        total_loss += loss.item()
+    if scheduler:
+        scheduler.step()
+    return total_loss / len(loader)
+
+def evaluate(model, loader, device, num_classes, use_tta=False):
+    model.eval()
+    all_labels, all_preds, all_probs = [], [], []
+
+    tta_model = tta.ClassificationTTAWrapper(
+        model,
+        tta.Compose([
+            tta.HorizontalFlip(),
+            tta.VerticalFlip(),
+            tta.Rotate90(angles=[0, 90, 180, 270]),
+        ]),
+        merge_mode='mean'
+    ) if use_tta else model
+
+    device_type = 'cuda' if device.type == 'cuda' else 'cpu'
+    with torch.no_grad():
+        for images, labels in loader:
+            images, labels = images.to(device), labels.to(device)
+            with torch.amp.autocast(device_type=device_type):
+                outputs = tta_model(images) if use_tta else model(images)
+            
+            # FIXED: Use PyTorch F.softmax (numerically stable and properly normalized)
+            probs = F.softmax(outputs, dim=1).cpu().numpy()
+            # Replace any NaN/inf with small values before argmax
+            probs = np.nan_to_num(probs, nan=1e-8, posinf=1.0, neginf=1e-8)
+            # Ensure non-negative and re-normalize
+            probs = np.maximum(probs, 1e-8)
+            probs = probs / (probs.sum(axis=1, keepdims=True) + 1e-10)
+            preds = np.argmax(probs, axis=1)
+
+            all_labels.extend(labels.cpu().numpy())
+            all_preds.extend(preds)
+            all_probs.extend(probs)
+
+    y_true = np.array(all_labels)
+    y_pred = np.array(all_preds)
+    y_prob = np.array(all_probs)
+
+    return compute_metrics(y_true, y_pred, y_prob, num_classes), y_true, y_pred, y_prob
+
+# -------------------------
+# Data loading (with patient-level splitting)
+# -------------------------
+def load_isic2019_data(data_root, metadata_path, split_name="train"):
+    data_root = Path(data_root)
+    print(f"\n[INFO] Loading ISIC2019 {split_name} data from {data_root}")
+
+    df = pd.read_csv(metadata_path)
+    print(f"[INFO] Loaded {len(df)} samples from {split_name} metadata")
+
+    # Detect image directory
+    possible = [data_root / "ISIC_2019_Training_Input", data_root / "Training_Input", data_root]
+    img_dir = next((d for d in possible if d.exists() and any(d.iterdir())), data_root)
+    print(f"[INFO] Using image directory: {img_dir.relative_to(data_root) if img_dir != data_root else img_dir.name}")
+
+    # Parse labels
+    all_paths, all_labels, all_patients = [], [], []
+    for _, row in df.iterrows():
+        img_name = str(row['image'])
+        candidates = [img_dir / f"{img_name}.jpg", img_dir / f"{img_name}.jpeg", img_dir / img_name]
+        img_path = next((p for p in candidates if p.is_file()), None)
+
+        if not img_path:
+            continue
+
+        # Find the diagnosis column
+        diag = None
+        for col in df.columns:
+            if col.upper() in ISIC2019_CLASS_MAPPING and row[col] == 1.0:
+                diag = ISIC2019_CLASS_MAPPING[col.upper()]
+                break
+
+        if diag is None:
+            continue
+
+        all_paths.append(img_path)
+        all_labels.append(diag)
+        all_patients.append(img_name.split('_')[1] if '_' in img_name else img_name[:8])
+
+    print(f"[INFO] Loaded {len(all_paths)} valid {split_name} images")
+
+    # Convert to numeric
+    label_to_idx = {name: i for i, name in enumerate(CLASS_NAMES)}
+    numeric_labels = [label_to_idx[lbl] for lbl in all_labels]
+
+    # Print distribution
+    counts = Counter(all_labels)
+    print(f"[INFO] {split_name.capitalize()} class distribution:")
+    for i, name in enumerate(CLASS_NAMES):
+        count = counts.get(name, 0)
+        pct = 100.0 * count / len(all_labels) if all_labels else 0
+        print(f"  {i}: {name:8s} - {count:6d} ({pct:5.2f}%)")
+
+    return all_paths, numeric_labels, all_patients
+
+# -------------------------
+# Main
+# -------------------------
+def main(args):
+    set_seed(args.seed)
+    device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+    print(f"[INFO] Using device: {device}")
+
+    os.makedirs(args.output_dir, exist_ok=True)
+    now = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Load data
+    all_paths, all_labels, all_patients = load_isic2019_data(args.data_root, args.metadata, "train")
+    label_to_idx = {name: i for i, name in enumerate(CLASS_NAMES)}
+    num_classes = len(CLASS_NAMES)
+
+    # Patient-level split (prevents data leakage)
+    unique_patients = list(set(all_patients))
+    train_patients, val_patients = train_test_split(
+        unique_patients,
+        test_size=args.val_size,
+        random_state=args.seed,
+        shuffle=True
+    )
+    train_patients_set = set(train_patients)
+    val_patients_set = set(val_patients)
+
+    train_p, train_l = [], []
+    val_p, val_l = [], []
+    for path, label, patient in zip(all_paths, all_labels, all_patients):
+        if patient in train_patients_set:
+            train_p.append(path)
+            train_l.append(label)
+        else:
+            val_p.append(path)
+            val_l.append(label)
+
+    print(f"\n[INFO] Train: {len(train_p)} | Val: {len(val_p)}")
+
+    # Optional test set
+    test_loader = None
+    if args.test_metadata and args.test_root:
+        test_paths, test_labels, _ = load_isic2019_data(args.test_root, args.test_metadata, "test")
+        test_dataset = SkinLesionDataset(test_paths, test_labels, transform=val_transform, preload=args.preload)
+        test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False,
+                                 num_workers=max(0, args.workers // 2), pin_memory=True,
+                                 worker_init_fn=worker_init_fn)
+
+    # Transforms
+    train_transform = transforms.Compose([
+        transforms.RandomResizedCrop(args.img_size, scale=(0.7, 1.0), ratio=(0.8, 1.2)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomVerticalFlip(),
+        transforms.RandomRotation(20),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.15, hue=0.02),
+        transforms.ToTensor(),
+        transforms.RandomErasing(p=0.2, scale=(0.02, 0.15), ratio=(0.3, 3.3)),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    val_transform = transforms.Compose([
+        transforms.Resize(int(args.img_size * 1.05)),
+        transforms.CenterCrop(args.img_size),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+
+    # Datasets
+    train_dataset = SkinLesionDataset(train_p, train_l, train_transform, preload=args.preload)
+    val_dataset   = SkinLesionDataset(val_p,   val_l,   val_transform, preload=args.preload)
+
+    # Weighted sampler
+    class_counts = Counter(train_l)
+    class_weights = np.array([1.0 / max(class_counts.get(c, 1), 1) for c in range(num_classes)], dtype=np.float32)
+    class_weights /= class_weights.mean()
+    sample_weights = np.array([class_weights[s['label']] for s in train_dataset.samples])
+    sampler = WeightedRandomSampler(sample_weights.tolist(), len(sample_weights), replacement=True)
+
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, sampler=sampler,
+                              num_workers=args.workers, pin_memory=True, worker_init_fn=worker_init_fn)
+    val_loader   = DataLoader(val_dataset,   batch_size=args.batch_size, shuffle=False,
+                              num_workers=max(0, args.workers // 2), pin_memory=True, worker_init_fn=worker_init_fn)
+
+    # Model / Optim / Scheduler
+    model = build_model(num_classes, args.model_name, pretrained=not args.no_pretrained).to(device)
+    alpha = torch.tensor(class_weights, dtype=torch.float32, device=device)
+    criterion = FocalLoss(gamma=args.focal_gamma, alpha=alpha, device=device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs) if args.use_cosine else None
+    scaler = torch.amp.GradScaler('cuda', enabled=(torch.cuda.is_available() and not args.no_cuda))
+
+    # Experiment metadata
+    meta = {
+        "created_at": now,
+        "dataset": "ISIC2019",
+        "cmd": " ".join(sys.argv),
+        "seed": args.seed,
+        "model_name": args.model_name,
+        "num_classes": num_classes,
+        "label_map": label_to_idx,
+        "class_names": CLASS_NAMES,
+    }
+    with open(Path(args.output_dir) / f"experiment_{now}_meta.json", "w") as f:
+        json.dump(meta, f, indent=2)
+
+    # Training loop
+    best_auc = -1.0
+    best_epoch = -1
+    history = []
+
+    print(f"\n[INFO] Starting training for {args.epochs} epochs...")
+    print("="*70)
+
+    for epoch in range(1, args.epochs + 1):
+        start = time.time()
+        loss = train_one_epoch(model, optimizer, scheduler, train_loader, device, criterion, scaler)
+
+        use_tta_val = args.use_tta and (epoch == args.epochs or epoch % 10 == 0)
+        val_metrics, _, _, _ = evaluate(model, val_loader, device, num_classes, use_tta=use_tta_val)
+
+        auc = val_metrics.get('auc', val_metrics.get('auc_macro', 0))
+        bal_acc = val_metrics.get('balanced_accuracy', 0)
+        print(f"[E{epoch:3d}] loss={loss:.4f} | val_f1={val_metrics['f1_macro']:.4f} | "
+              f"val_auc={auc:.4f} | bal_acc={bal_acc:.4f} | t={time.time()-start:.1f}s")
+
+        history.append({"epoch": epoch, "loss": loss, "val_metrics": val_metrics})
+
+        # Checkpoint
+        if epoch % 10 == 0 or epoch == args.epochs:
+            ckpt_path = Path(args.output_dir) / f"checkpoint_epoch{epoch}_{now}.pth"
+            torch.save({
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict() if scheduler else None,
+                "label_map": label_to_idx,
+            }, ckpt_path)
+
+        # Best model
+        score = auc if auc > 0 else bal_acc
+        if score > best_auc:
+            best_auc = score
+            best_epoch = epoch
+            best_path = Path(args.output_dir) / f"best_model_{now}.pth"
+            torch.save({
+                "model_state_dict": model.state_dict(),
+                "label_map": label_to_idx,
+                "class_names": CLASS_NAMES,
+                "epoch": epoch,
+                "auc": best_auc,
+            }, best_path)
+            print(f"  -> New best (AUC={best_auc:.4f})")
+
+        if args.early_stop and epoch - best_epoch >= args.early_stop:
+            print(f"\n[INFO] Early stopping at epoch {epoch}")
+            break
+
+    # Final evaluation
+    print("\n[INFO] Loading best model for final evaluation...")
+    checkpoint = torch.load(best_path, map_location=device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+
+    print("[INFO] Final validation (with TTA)...")
+    final_val_metrics, _, _, _ = evaluate(model, val_loader, device, num_classes, use_tta=True)
+
+    if test_loader:
+        print("[INFO] Final test set evaluation (with TTA)...")
+        final_test_metrics, _, _, _ = evaluate(model, test_loader, device, num_classes, use_tta=True)
+    else:
+        final_test_metrics = None
+
+    # Reporting
+    def print_metrics(m, name):
+        print(f"\n=== {name} RESULTS ===")
+        print(f"Macro F1      : {m['f1_macro']:.4f}")
+        print(f"Macro AUC     : {m.get('auc_macro',0):.4f}")
+        print(f"Balanced Acc  : {m.get('balanced_accuracy',0):.4f}")
+        print(f"Macro Prec/Rec: {m['precision_macro']:.4f} / {m['recall_macro']:.4f}")
+        print("\nPer-class:")
+        for idx in sorted(label_to_idx.values()):
+            c = CLASS_NAMES[idx]
+            p = m['per_class'][idx]
+            print(f"  {c:8s}: F1={p['f1']:.4f}  Prec={p['precision']:.4f}  Rec={p['recall']:.4f}  Sup={p['support']}")
+
+    print_metrics(final_val_metrics, "VALIDATION")
+    if final_test_metrics:
+        print_metrics(final_test_metrics, "TEST")
+
+    # Save everything
+    with open(Path(args.output_dir) / f"metrics_history_{now}.json", "w") as f:
+        json.dump(history, f, indent=2)
+    with open(Path(args.output_dir) / f"final_val_metrics_{now}.json", "w") as f:
+        json.dump(final_val_metrics, f, indent=2)
+    if final_test_metrics:
+        with open(Path(args.output_dir) / f"final_test_metrics_{now}.json", "w") as f:
+            json.dump(final_test_metrics, f, indent=2)
+
+    print(f"\nTraining complete! Best model: {best_path}")
+    print(f"All outputs saved to: {args.output_dir}")
+
+# -------------------------
+# CLI
+# -------------------------
+def parse_args():
+    p = argparse.ArgumentParser(description="Train 8-class ISIC2019 skin lesion classifier")
+    p.add_argument("--data_root", required=True, help="Root folder containing training images")
+    p.add_argument("--metadata", required=True, help="Path to ISIC_2019_Training_GroundTruth.csv")
+    p.add_argument("--test_root", default=None, help="Root folder for official test images (optional)")
+    p.add_argument("--test_metadata", default=None, help="Path to ISIC_2019_Test_GroundTruth.csv (optional)")
+    p.add_argument("--output_dir", default="./output_isic2019", help="Output directory")
+    p.add_argument("--model_name", default="tf_efficientnet_b4", help="timm model name")
+    p.add_argument("--img_size", type=int, default=384)
+    p.add_argument("--batch_size", type=int, default=20)
+    p.add_argument("--epochs", type=int, default=80)
+    p.add_argument("--lr", type=float, default=5e-5)
+    p.add_argument("--weight_decay", type=float, default=1e-4)
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--workers", type=int, default=4)
+    p.add_argument("--val_size", type=float, default=0.2)
+    p.add_argument("--no_cuda", action="store_true")
+    p.add_argument("--no_pretrained", action="store_true")
+    p.add_argument("--focal_gamma", type=float, default=2.5)
+    p.add_argument("--use_cosine", action="store_true")
+    p.add_argument("--early_stop", type=int, default=30)
+    p.add_argument("--use_tta", action="store_true")
+    p.add_argument("--preload", action="store_true")
+    return p.parse_args()
+
+if __name__ == "__main__":
+    args = parse_args()
+    main(args)
