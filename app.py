@@ -299,12 +299,11 @@ def main():
                 
                 # Image info
                 st.caption(f"Image size: {image.size[0]} x {image.size[1]} pixels")
-        
-        with col2:
-            st.subheader("Classification Results")
             
-            # Make prediction
-            try:
+            with col2:
+                st.subheader("Classification Results")
+                
+                # Make prediction
                 with st.spinner("Analyzing image..."):
                     image_tensor = preprocess_image(image)
                     probabilities = predict_with_tta(model, image_tensor, use_tta=use_tta)
@@ -332,69 +331,64 @@ def main():
                 
                 # Description
                 st.markdown(f"**Description:** {CLASS_INFO[top_class]['description']}")
+        
+            # Show probability chart
+            if show_all_probabilities:
+                st.subheader("📊 Detailed Probability Distribution")
+                fig = create_probability_chart(probabilities, CLASS_NAMES)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Clinical recommendations
+            st.subheader("🩺 Clinical Recommendations")
+            
+            if risk_level in ['Critical', 'High']:
+                st.error(f"""
+                **⚠️ URGENT: This lesion shows characteristics of {CLASS_INFO[top_class]['full_name']}**
                 
-            except Exception as e:
-                st.error(f"Error during prediction: {str(e)}")
-                st.info("Please try uploading a different image or refresh the page.")
-                return
-        
-        # Show probability chart
-        if show_all_probabilities:
-            st.subheader("📊 Detailed Probability Distribution")
-            fig = create_probability_chart(probabilities, CLASS_NAMES)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        # Clinical recommendations
-        st.subheader("🩺 Clinical Recommendations")
-        
-        if risk_level in ['Critical', 'High']:
-            st.error(f"""
-            **⚠️ URGENT: This lesion shows characteristics of {CLASS_INFO[top_class]['full_name']}**
+                **Recommended Actions:**
+                - Schedule an appointment with a dermatologist immediately
+                - Do not delay - early detection is crucial
+                - Bring this analysis to your appointment
+                - Consider getting a biopsy if recommended by your doctor
+                """)
+            elif risk_level == 'Medium':
+                st.warning(f"""
+                **⚡ This lesion shows characteristics of {CLASS_INFO[top_class]['full_name']}**
+                
+                **Recommended Actions:**
+                - Schedule a dermatologist appointment within 1-2 weeks
+                - Monitor for any changes in size, color, or shape
+                - Consider treatment options with your doctor
+                - Protect from sun exposure
+                """)
+            else:
+                st.info(f"""
+                **✓ This lesion appears to be {CLASS_INFO[top_class]['full_name']}**
+                
+                **Recommended Actions:**
+                - Continue regular skin monitoring
+                - Annual dermatology check-ups recommended
+                - Report any changes to your doctor
+                - Practice sun safety
+                """)
             
-            **Recommended Actions:**
-            - Schedule an appointment with a dermatologist immediately
-            - Do not delay - early detection is crucial
-            - Bring this analysis to your appointment
-            - Consider getting a biopsy if recommended by your doctor
-            """)
-        elif risk_level == 'Medium':
-            st.warning(f"""
-            **⚡ This lesion shows characteristics of {CLASS_INFO[top_class]['full_name']}**
+            # Top 3 predictions
+            st.subheader("🔍 Top 3 Predictions")
+            top_3_idx = np.argsort(probabilities)[::-1][:3]
             
-            **Recommended Actions:**
-            - Schedule a dermatologist appointment within 1-2 weeks
-            - Monitor for any changes in size, color, or shape
-            - Consider treatment options with your doctor
-            - Protect from sun exposure
-            """)
-        else:
-            st.info(f"""
-            **✓ This lesion appears to be {CLASS_INFO[top_class]['full_name']}**
-            
-            **Recommended Actions:**
-            - Continue regular skin monitoring
-            - Annual dermatology check-ups recommended
-            - Report any changes to your doctor
-            - Practice sun safety
-            """)
-        
-        # Top 3 predictions
-        st.subheader("🔍 Top 3 Predictions")
-        top_3_idx = np.argsort(probabilities)[::-1][:3]
-        
-        cols = st.columns(3)
-        for i, idx in enumerate(top_3_idx):
-            class_name = CLASS_NAMES[idx]
-            prob = probabilities[idx]
-            
-            with cols[i]:
-                st.markdown(f"""
-                <div style="padding: 15px; border-radius: 10px; border: 2px solid {CLASS_INFO[class_name]['color']};">
-                    <h4>#{i+1}: {CLASS_INFO[class_name]['full_name']}</h4>
-                    <p><strong>Confidence:</strong> {prob*100:.1f}%</p>
-                    <p><strong>Risk:</strong> {CLASS_INFO[class_name]['risk']}</p>
-                </div>
-                """, unsafe_allow_html=True)
+            cols = st.columns(3)
+            for i, idx in enumerate(top_3_idx):
+                class_name = CLASS_NAMES[idx]
+                prob = probabilities[idx]
+                
+                with cols[i]:
+                    st.markdown(f"""
+                    <div style="padding: 15px; border-radius: 10px; border: 2px solid {CLASS_INFO[class_name]['color']};">
+                        <h4>#{i+1}: {CLASS_INFO[class_name]['full_name']}</h4>
+                        <p><strong>Confidence:</strong> {prob*100:.1f}%</p>
+                        <p><strong>Risk:</strong> {CLASS_INFO[class_name]['risk']}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
         
         except Exception as e:
             st.error(f"⚠️ An error occurred while processing the image.")
