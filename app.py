@@ -209,14 +209,14 @@ def create_risk_indicator(top_class):
 # -------------------------
 def main():
     st.set_page_config(
-        page_title="Skin Lesion Classifier",
+        page_title="Demoscope Analysis Tool",
         page_icon="🔬",
         layout="wide",
         initial_sidebar_state="expanded"
     )
     
     # Header
-    st.title("🔬 AI Skin Lesion Classifier")
+    st.title("🔬 Dermoscopic image analyser")
     st.markdown("**8-Class Dermoscopic Image Analysis**")
     st.markdown("*Powered by EfficientNet-B4 trained on ISIC2019 dataset*")
     
