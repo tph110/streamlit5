@@ -283,48 +283,60 @@ def main():
     )
     
     if uploaded_file is not None:
-        # Display image
-        col1, col2 = st.columns([1, 1])
-        
-        with col1:
-            st.subheader("Uploaded Image")
-            image = Image.open(uploaded_file)
-            st.image(image, use_container_width=True)
+        try:
+            # Display image
+            col1, col2 = st.columns([1, 1])
             
-            # Image info
-            st.caption(f"Image size: {image.size[0]} x {image.size[1]} pixels")
+            with col1:
+                st.subheader("Uploaded Image")
+                image = Image.open(uploaded_file)
+                
+                # Try new parameter, fall back to old
+                try:
+                    st.image(image, use_column_width=True)
+                except TypeError:
+                    st.image(image, width=400)
+                
+                # Image info
+                st.caption(f"Image size: {image.size[0]} x {image.size[1]} pixels")
         
         with col2:
             st.subheader("Classification Results")
             
             # Make prediction
-            with st.spinner("Analyzing image..."):
-                image_tensor = preprocess_image(image)
-                probabilities = predict_with_tta(model, image_tensor, use_tta=use_tta)
-            
-            # Get top prediction
-            top_idx = np.argmax(probabilities)
-            top_class = CLASS_NAMES[top_idx]
-            top_prob = probabilities[top_idx]
-            
-            # Display risk indicator
-            risk_html, risk_level = create_risk_indicator(top_class)
-            st.markdown(risk_html, unsafe_allow_html=True)
-            
-            st.markdown("---")
-            
-            # Display top prediction
-            st.markdown(f"### **Predicted Diagnosis:**")
-            st.markdown(f"# {CLASS_INFO[top_class]['full_name']}")
-            st.markdown(f"**Confidence:** {top_prob*100:.1f}%")
-            
-            # Progress bar
-            st.progress(float(top_prob))
-            
-            st.markdown("---")
-            
-            # Description
-            st.markdown(f"**Description:** {CLASS_INFO[top_class]['description']}")
+            try:
+                with st.spinner("Analyzing image..."):
+                    image_tensor = preprocess_image(image)
+                    probabilities = predict_with_tta(model, image_tensor, use_tta=use_tta)
+                
+                # Get top prediction
+                top_idx = np.argmax(probabilities)
+                top_class = CLASS_NAMES[top_idx]
+                top_prob = probabilities[top_idx]
+                
+                # Display risk indicator
+                risk_html, risk_level = create_risk_indicator(top_class)
+                st.markdown(risk_html, unsafe_allow_html=True)
+                
+                st.markdown("---")
+                
+                # Display top prediction
+                st.markdown(f"### **Predicted Diagnosis:**")
+                st.markdown(f"# {CLASS_INFO[top_class]['full_name']}")
+                st.markdown(f"**Confidence:** {top_prob*100:.1f}%")
+                
+                # Progress bar
+                st.progress(float(top_prob))
+                
+                st.markdown("---")
+                
+                # Description
+                st.markdown(f"**Description:** {CLASS_INFO[top_class]['description']}")
+                
+            except Exception as e:
+                st.error(f"Error during prediction: {str(e)}")
+                st.info("Please try uploading a different image or refresh the page.")
+                return
         
         # Show probability chart
         if show_all_probabilities:
@@ -383,6 +395,17 @@ def main():
                     <p><strong>Risk:</strong> {CLASS_INFO[class_name]['risk']}</p>
                 </div>
                 """, unsafe_allow_html=True)
+        
+        except Exception as e:
+            st.error(f"⚠️ An error occurred while processing the image.")
+            st.error(f"Error details: {str(e)}")
+            st.info("Please try:")
+            st.markdown("""
+            - Uploading a different image
+            - Refreshing the page
+            - Checking that the image is a valid JPG/PNG file
+            - Ensuring the image is not corrupted
+            """)
     
     else:
         # Instructions when no image is uploaded
