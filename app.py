@@ -94,7 +94,7 @@ def set_background(image_url):
     
     /* 2. Main Content Container Overlay for Readability */
     .main .block-container {{
-        background-color: rgba(18, 18, 18, 0.85); /* Semi-transparent dark overlay */
+        background-color: rgba(18, 18, 18, 0.6); /* Semi-transparent dark overlay */
         padding-top: 4rem;
         padding-right: 4rem;
         padding-left: 4rem;
