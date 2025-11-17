@@ -13,7 +13,6 @@ import requests
 from io import BytesIO
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px # Not used, but kept for completeness
 
 # -------------------------
 # Configuration
@@ -93,7 +92,20 @@ def load_model():
         
         # Build model
         model = timm.create_model(MODEL_NAME, pretrained=False, num_classes=NUM_CLASSES)
-        model.load_state_dict(checkpoint['model_state_dict'])
+        
+        # Handle different checkpoint formats
+        if isinstance(checkpoint, dict):
+            if 'model_state_dict' in checkpoint:
+                model.load_state_dict(checkpoint['model_state_dict'])
+            elif 'state_dict' in checkpoint:
+                model.load_state_dict(checkpoint['state_dict'])
+            else:
+                # Assume the checkpoint is the state dict itself
+                model.load_state_dict(checkpoint)
+        else:
+            # Checkpoint is directly the state dict
+            model.load_state_dict(checkpoint)
+        
         model.eval()
         
         return model
@@ -195,7 +207,7 @@ def create_probability_chart(probabilities: np.ndarray, class_names: list) -> go
     
     return fig
 
-def create_risk_indicator(top_class: str) -> tuple[str, str]:
+def create_risk_indicator(top_class: str):
     """Create a risk level indicator HTML and return the risk level."""
     risk = CLASS_INFO[top_class]['risk']
     
@@ -302,8 +314,8 @@ def main():
                 st.subheader("Uploaded Image")
                 image = Image.open(uploaded_file)
                 
-                # Use standard display parameters
-                st.image(image, use_column_width=True)
+                # FIXED: Changed from use_column_width to use_container_width (deprecated parameter)
+                st.image(image, use_container_width=True)
                 
                 # Image info
                 st.caption(f"Image size: {image.size[0]} x {image.size[1]} pixels")
@@ -444,3 +456,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
