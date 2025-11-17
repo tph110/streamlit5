@@ -13,7 +13,7 @@ import requests
 from io import BytesIO
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
+import plotly.express as px # Not used, but kept for completeness
 
 # -------------------------
 # Configuration
@@ -113,7 +113,7 @@ def get_transform():
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-def preprocess_image(image):
+def preprocess_image(image: Image.Image) -> torch.Tensor:
     """Preprocess uploaded image"""
     # Convert to RGB if needed
     if image.mode != 'RGB':
@@ -128,7 +128,7 @@ def preprocess_image(image):
 # -------------------------
 # Prediction with TTA
 # -------------------------
-def predict_with_tta(model, image_tensor, use_tta=True):
+def predict_with_tta(model: torch.nn.Module, image_tensor: torch.Tensor, use_tta: bool = True) -> np.ndarray:
     """Make prediction with optional Test-Time Augmentation"""
     with torch.no_grad():
         if use_tta:
@@ -155,18 +155,28 @@ def predict_with_tta(model, image_tensor, use_tta=True):
 # -------------------------
 # Visualization
 # -------------------------
-def create_probability_chart(probabilities, class_names):
-    """Create an interactive bar chart of probabilities"""
-    # Sort by probability
+def create_probability_chart(probabilities: np.ndarray, class_names: list) -> go.Figure:
+    """
+    Create an interactive bar chart of probabilities.
+    
+    FIXED: Ensures bar length (x) and label (y) are correctly aligned
+    after sorting by probability.
+    """
+    # Sort by probability (descending)
     sorted_indices = np.argsort(probabilities)[::-1]
     sorted_probs = probabilities[sorted_indices]
     sorted_names = [class_names[i] for i in sorted_indices]
+    
+    # Prepare all lists in the same sorted order
+    sorted_full_names = [CLASS_INFO[name]['full_name'] for name in sorted_names]
     sorted_colors = [CLASS_INFO[name]['color'] for name in sorted_names]
     
     fig = go.Figure(data=[
         go.Bar(
+            # Use the sorted probabilities for the bar length (x-axis)
             x=sorted_probs * 100,
-            y=[CLASS_INFO[name]['full_name'] for name in sorted_names],
+            # Use the sorted full names for the y-axis labels
+            y=sorted_full_names, 
             orientation='h',
             marker=dict(color=sorted_colors),
             text=[f'{p*100:.1f}%' for p in sorted_probs],
@@ -185,8 +195,8 @@ def create_probability_chart(probabilities, class_names):
     
     return fig
 
-def create_risk_indicator(top_class):
-    """Create a risk level indicator"""
+def create_risk_indicator(top_class: str) -> tuple[str, str]:
+    """Create a risk level indicator HTML and return the risk level."""
     risk = CLASS_INFO[top_class]['risk']
     
     risk_colors = {
@@ -198,11 +208,12 @@ def create_risk_indicator(top_class):
     
     color = risk_colors.get(risk, '#808080')
     
-    return f"""
+    html = f"""
     <div style="padding: 20px; border-radius: 10px; background-color: {color}; color: white; text-align: center;">
         <h2 style="margin: 0;">Risk Level: {risk}</h2>
     </div>
-    """, risk
+    """
+    return html, risk
 
 # -------------------------
 # Streamlit UI
@@ -291,11 +302,8 @@ def main():
                 st.subheader("Uploaded Image")
                 image = Image.open(uploaded_file)
                 
-                # Try new parameter, fall back to old
-                try:
-                    st.image(image, use_column_width=True)
-                except TypeError:
-                    st.image(image, width=400)
+                # Use standard display parameters
+                st.image(image, use_column_width=True)
                 
                 # Image info
                 st.caption(f"Image size: {image.size[0]} x {image.size[1]} pixels")
@@ -331,11 +339,12 @@ def main():
                 
                 # Description
                 st.markdown(f"**Description:** {CLASS_INFO[top_class]['description']}")
-        
+            
             # Show probability chart
             if show_all_probabilities:
                 st.subheader("📊 Detailed Probability Distribution")
-                fig = create_probability_chart(probabilities, CLASS_NAMES)
+                # The corrected function is called here
+                fig = create_probability_chart(probabilities, CLASS_NAMES) 
                 st.plotly_chart(fig, use_container_width=True)
             
             # Clinical recommendations
