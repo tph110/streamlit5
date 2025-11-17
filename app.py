@@ -217,7 +217,7 @@ def main():
     
     # Header
     st.title("🔬 Dermoscopic image analyser")
-    st.markdown("**8-Class Dermoscopic Image Analysis**")
+    st.markdown("**8-Class Dermoscopic Image Analysis | Macro F1: 0.845 | AUC: 0.984 | Balanced Accuracy: 0.836**")
     st.markdown("*Powered by EfficientNet-B4 trained on ISIC2019 dataset using over 25,000 images*")
     
     # Sidebar
