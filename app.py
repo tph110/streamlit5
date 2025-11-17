@@ -127,135 +127,135 @@ def set_background(image_url):
 # -------------------------
 @st.cache_resource
 def load_model():
-    """Load the trained model from HuggingFace"""
-    try:
-        # Download model weights
-        with st.spinner("Downloading model (this may take a minute on first run)..."):
-            response = requests.get(MODEL_URL)
-            response.raise_for_status()
-            
-        # Load checkpoint
-        checkpoint = torch.load(BytesIO(response.content), map_location='cpu')
-        
-        # Build model
-        model = timm.create_model(MODEL_NAME, pretrained=False, num_classes=NUM_CLASSES)
-        
-        # Handle different checkpoint formats
-        if isinstance(checkpoint, dict):
-            if 'model_state_dict' in checkpoint:
-                model.load_state_dict(checkpoint['model_state_dict'])
-            elif 'state_dict' in checkpoint:
-                model.load_state_dict(checkpoint['state_dict'])
-            else:
-                # Assume the checkpoint is the state dict itself
-                model.load_state_dict(checkpoint)
-        else:
-            # Checkpoint is directly the state dict
-            model.load_state_dict(checkpoint)
-        
-        model.eval()
-        
-        return model
-    except Exception as e:
-        st.error(f"Error loading model: {e}")
-        return None
+    """Load the trained model from HuggingFace"""
+    try:
+        # Download model weights
+        with st.spinner("Downloading model (this may take a minute on first run)..."):
+            response = requests.get(MODEL_URL)
+            response.raise_for_status()
+            
+        # Load checkpoint
+        checkpoint = torch.load(BytesIO(response.content), map_location='cpu')
+        
+        # Build model
+        model = timm.create_model(MODEL_NAME, pretrained=False, num_classes=NUM_CLASSES)
+        
+        # Handle different checkpoint formats
+        if isinstance(checkpoint, dict):
+            if 'model_state_dict' in checkpoint:
+                model.load_state_dict(checkpoint['model_state_dict'])
+            elif 'state_dict' in checkpoint:
+                model.load_state_dict(checkpoint['state_dict'])
+            else:
+                # Assume the checkpoint is the state dict itself
+                model.load_state_dict(checkpoint)
+        else:
+            # Checkpoint is directly the state dict
+            model.load_state_dict(checkpoint)
+        
+        model.eval()
+        
+        return model
+    except Exception as e:
+        st.error(f"Error loading model: {e}")
+        return None
 
 # -------------------------
 # Image Preprocessing & Prediction
 # -------------------------
 def get_transform():
-    """Get the same transform used during validation"""
-    return transforms.Compose([
-        transforms.Resize(int(IMG_SIZE * 1.05)),
-        transforms.CenterCrop(IMG_SIZE),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
+    """Get the same transform used during validation"""
+    return transforms.Compose([
+        transforms.Resize(int(IMG_SIZE * 1.05)),
+        transforms.CenterCrop(IMG_SIZE),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
 
 def preprocess_image(image: Image.Image) -> torch.Tensor:
-    """Preprocess uploaded image"""
-    if image.mode != 'RGB':
-        image = image.convert('RGB')
-    
-    transform = get_transform()
-    tensor = transform(image).unsqueeze(0) 
-    return tensor
+    """Preprocess uploaded image"""
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+    
+    transform = get_transform()
+    tensor = transform(image).unsqueeze(0) 
+    return tensor
 
 def predict_with_tta(model: torch.nn.Module, image_tensor: torch.Tensor, use_tta: bool = True) -> np.ndarray:
-    """Make prediction with optional Test-Time Augmentation"""
-    with torch.no_grad():
-        if use_tta:
-            # Original, Horizontal flip, Vertical flip
-            probs_list = [
-                F.softmax(model(image_tensor), dim=1),
-                F.softmax(model(torch.flip(image_tensor, dims=[3])), dim=1),
-                F.softmax(model(torch.flip(image_tensor, dims=[2])), dim=1)
-            ]
-            probs = torch.stack(probs_list).mean(0)
-        else:
-            outputs = model(image_tensor)
-            probs = F.softmax(outputs, dim=1)
-    
-    return probs.cpu().numpy()[0]
+    """Make prediction with optional Test-Time Augmentation"""
+    with torch.no_grad():
+        if use_tta:
+            # Original, Horizontal flip, Vertical flip
+            probs_list = [
+                F.softmax(model(image_tensor), dim=1),
+                F.softmax(model(torch.flip(image_tensor, dims=[3])), dim=1),
+                F.softmax(model(torch.flip(image_tensor, dims=[2])), dim=1)
+            ]
+            probs = torch.stack(probs_list).mean(0)
+        else:
+            outputs = model(image_tensor)
+            probs = F.softmax(outputs, dim=1)
+    
+    return probs.cpu().numpy()[0]
 
 # -------------------------
 # Visualization Utilities
 # -------------------------
 def create_probability_chart(probabilities: np.ndarray, class_names: list) -> go.Figure:
-    """Create an interactive bar chart of probabilities."""
-    prob_class_pairs = list(zip(probabilities, class_names))
-    prob_class_pairs.sort(key=lambda x: x[0], reverse=True)
-    
-    sorted_probs = [pair[0] for pair in prob_class_pairs]
-    sorted_names = [pair[1] for pair in prob_class_pairs]
-    
-    sorted_full_names = [CLASS_INFO[name]['full_name'] for name in sorted_names]
-    sorted_colors = [CLASS_INFO[name]['color'] for name in sorted_names]
-    
-    fig = go.Figure(data=[
-        go.Bar(
-            x=[p * 100 for p in sorted_probs],
-            y=sorted_full_names,
-            orientation='h',
-            marker=dict(color=sorted_colors),
-            text=[f'{p*100:.1f}%' for p in sorted_probs],
-            textposition='outside',
-        )
-    ])
-    
-    fig.update_layout(
-        title="Classification Probabilities",
-        xaxis_title="Confidence (%)",
-        yaxis_title="Lesion Type",
-        height=400,
-        showlegend=False,
-        plot_bgcolor='rgba(30, 30, 30, 0.8)', # Dark plot background for aesthetic
-        paper_bgcolor='rgba(18, 18, 18, 0.1)', # Transparent paper background
-        font=dict(color='#F0F2F6'), # Light font for dark theme
-        xaxis=dict(range=[0, 105])
-    )
-    
-    return fig
+    """Create an interactive bar chart of probabilities."""
+    prob_class_pairs = list(zip(probabilities, class_names))
+    prob_class_pairs.sort(key=lambda x: x[0], reverse=True)
+    
+    sorted_probs = [pair[0] for pair in prob_class_pairs]
+    sorted_names = [pair[1] for pair in prob_class_pairs]
+    
+    sorted_full_names = [CLASS_INFO[name]['full_name'] for name in sorted_names]
+    sorted_colors = [CLASS_INFO[name]['color'] for name in sorted_names]
+    
+    fig = go.Figure(data=[
+        go.Bar(
+            x=[p * 100 for p in sorted_probs],
+            y=sorted_full_names,
+            orientation='h',
+            marker=dict(color=sorted_colors),
+            text=[f'{p*100:.1f}%' for p in sorted_probs],
+            textposition='outside',
+        )
+    ])
+    
+    fig.update_layout(
+        title="Classification Probabilities",
+        xaxis_title="Confidence (%)",
+        yaxis_title="Lesion Type",
+        height=400,
+        showlegend=False,
+        plot_bgcolor='rgba(30, 30, 30, 0.8)', # Dark plot background for aesthetic
+        paper_bgcolor='rgba(18, 18, 18, 0.1)', # Transparent paper background
+        font=dict(color='#F0F2F6'), # Light font for dark theme
+        xaxis=dict(range=[0, 105])
+    )
+    
+    return fig
 
 def create_risk_indicator(top_class: str):
-    """Create a risk level indicator HTML and return the risk level."""
-    risk = CLASS_INFO[top_class]['risk']
-    
-    risk_colors = {
-        'Low': '#4CAF50', 
-        'Medium': '#FFC107',
-        'High': '#FF5722',
-        'Critical': '#F44336'
-    }
-    
-    color = risk_colors.get(risk, '#808080')
-    
-    html = f"""
-    <div style="padding: 20px; border-radius: 10px; background-color: {color}; color: white; text-align: center; margin-bottom: 20px;">
-        <h2 style="margin: 0; color: white !important;">Risk Level: {risk}</h2>
-    </div>
-    """
-    return html, risk
+    """Create a risk level indicator HTML and return the risk level."""
+    risk = CLASS_INFO[top_class]['risk']
+    
+    risk_colors = {
+        'Low': '#4CAF50', 
+        'Medium': '#FFC107',
+        'High': '#FF5722',
+        'Critical': '#F44336'
+    }
+    
+    color = risk_colors.get(risk, '#808080')
+    
+    html = f"""
+    <div style="padding: 20px; border-radius: 10px; background-color: {color}; color: white; text-align: center; margin-bottom: 20px;">
+        <h2 style="margin: 0; color: white !important;">Risk Level: {risk}</h2>
+    </div>
+    """
+    return html, risk
 
 # -------------------------
 # Streamlit UI
@@ -303,7 +303,7 @@ def main():
         st.divider()
         
         st.header("⚙️ Settings")
-        use_tta = st.checkbox("Use Test-Time Augmentation", value=True, 
+        use_tta = st.checkbox("Use Test-Time Augmentation", value=True, 
                               help="Improves accuracy but takes slightly longer")
         show_all_probabilities = st.checkbox("Show detailed probability chart", value=True)
         
@@ -333,7 +333,7 @@ def main():
     st.subheader("📤 Upload Dermoscopic Image")
     
     uploaded_file = st.file_uploader(
-        "Choose a dermoscopic image...", 
+        "Choose a dermoscopic image...", 
         type=['jpg', 'jpeg', 'png'],
         help="Upload a high-quality dermoscopic image for classification"
     )
@@ -384,7 +384,7 @@ def main():
             # Show probability chart
             if show_all_probabilities:
                 st.subheader("📊 Detailed Probability Distribution")
-                fig = create_probability_chart(probabilities, CLASS_NAMES) 
+                fig = create_probability_chart(probabilities, CLASS_NAMES) 
                 st.plotly_chart(fig, use_container_width=True)
             
             # Clinical recommendations
