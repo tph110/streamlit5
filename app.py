@@ -218,7 +218,7 @@ def main():
     # Header
     st.title("🔬 Dermoscopic image analyser")
     st.markdown("**8-Class Dermoscopic Image Analysis**")
-    st.markdown("*Powered by EfficientNet-B4 trained on ISIC2019 dataset using over 20,000 images*")
+    st.markdown("*Powered by EfficientNet-B4 trained on ISIC2019 dataset using over 25,000 images*")
     
     # Sidebar
     with st.sidebar:
@@ -429,7 +429,7 @@ def main():
     <div style="text-align: center; color: #666; padding: 20px;">
         <p><strong>Model Information:</strong> EfficientNet-B4 | Trained on 25,331 ISIC2019 images | 8-class classification</p>
         <p><strong>Performance:</strong> Macro F1: 0.845 | AUC: 0.984 | Balanced Accuracy: 0.836</p>
-        <p style="margin-top: 10px;">Created for educational and research purposes | Not for clinical diagnosis</p>
+        <p style="margin-top: 10px;">Created for educational and research purposes | Developed by Dr Tom Hutchinson, Oxford, England</p>
     </div>
     """, unsafe_allow_html=True)
 
