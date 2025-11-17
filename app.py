@@ -315,7 +315,7 @@ def main():
             with col1:
                 st.subheader("Uploaded Image")
                 image = Image.open(uploaded_file)
-                st.image(image, use_container_width=True)
+                st.image(image, use_column_width=True)
                 
                 # Image info
                 st.caption(f"Image size: {image.size[0]} x {image.size[1]} pixels")
