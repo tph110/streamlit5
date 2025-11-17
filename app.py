@@ -174,21 +174,23 @@ def create_probability_chart(probabilities: np.ndarray, class_names: list) -> go
     FIXED: Ensures bar length (x) and label (y) are correctly aligned
     after sorting by probability.
     """
+    # Create tuples of (probability, class_name) and sort together
+    prob_class_pairs = list(zip(probabilities, class_names))
     # Sort by probability (descending)
-    sorted_indices = np.argsort(probabilities)[::-1]
-    sorted_probs = probabilities[sorted_indices]
-    sorted_names = [class_names[i] for i in sorted_indices]
+    prob_class_pairs.sort(key=lambda x: x[0], reverse=True)
     
-    # Prepare all lists in the same sorted order
+    # Unzip the sorted pairs
+    sorted_probs = [pair[0] for pair in prob_class_pairs]
+    sorted_names = [pair[1] for pair in prob_class_pairs]
+    
+    # Now get the full names and colors in the same order
     sorted_full_names = [CLASS_INFO[name]['full_name'] for name in sorted_names]
     sorted_colors = [CLASS_INFO[name]['color'] for name in sorted_names]
     
     fig = go.Figure(data=[
         go.Bar(
-            # Use the sorted probabilities for the bar length (x-axis)
-            x=sorted_probs * 100,
-            # Use the sorted full names for the y-axis labels
-            y=sorted_full_names, 
+            x=[p * 100 for p in sorted_probs],  # Bar lengths
+            y=sorted_full_names,  # Y-axis labels
             orientation='h',
             marker=dict(color=sorted_colors),
             text=[f'{p*100:.1f}%' for p in sorted_probs],
@@ -313,8 +315,6 @@ def main():
             with col1:
                 st.subheader("Uploaded Image")
                 image = Image.open(uploaded_file)
-                
-                # FIXED: Changed from use_column_width to use_container_width (deprecated parameter)
                 st.image(image, use_container_width=True)
                 
                 # Image info
@@ -355,7 +355,6 @@ def main():
             # Show probability chart
             if show_all_probabilities:
                 st.subheader("📊 Detailed Probability Distribution")
-                # The corrected function is called here
                 fig = create_probability_chart(probabilities, CLASS_NAMES) 
                 st.plotly_chart(fig, use_container_width=True)
             
@@ -456,4 +455,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
