@@ -25,7 +25,7 @@ IMG_SIZE = 384
 CLASS_NAMES = ['akiec', 'bcc', 'bkl', 'df', 'mel', 'nv', 'scc', 'vasc']
 
 CLASS_INFO = {
-    'akiec': {
+    'akiec': {
         'full_name': 'Actinic Keratoses (AKIEC)',
         'description': 'Pre-cancerous lesions caused by sun damage. Requires monitoring and treatment.',
         'risk': 'Medium',
