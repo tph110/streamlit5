@@ -25,54 +25,54 @@ IMG_SIZE = 384
 CLASS_NAMES = ['akiec', 'bcc', 'bkl', 'df', 'mel', 'nv', 'scc', 'vasc']
 
 CLASS_INFO = {
-    'akiec': {
-        'full_name': 'Actinic Keratoses (AKIEC)',
-        'description': 'Pre-cancerous lesions caused by sun damage. Requires monitoring and treatment.',
-        'risk': 'Medium',
-        'color': '#FFA500' # Orange
-    },
-    'bcc': {
-        'full_name': 'Basal Cell Carcinoma (BCC)',
-        'description': 'Most common skin cancer. Slow-growing, rarely spreads, highly treatable.',
-        'risk': 'High',
-        'color': '#FF4444' # Bright Red
-    },
-    'bkl': {
-        'full_name': 'Benign Keratosis (BKL)',
-        'description': 'Non-cancerous skin growth. Generally harmless but may be removed for cosmetic reasons.',
-        'risk': 'Low',
-        'color': '#90EE90' # Light Green
-    },
-    'df': {
-        'full_name': 'Dermatofibroma (DF)',
-        'description': 'Benign fibrous nodule. Usually harmless and does not require treatment.',
-        'risk': 'Low',
-        'color': '#87CEEB' # Sky Blue
-    },
-    'mel': {
-        'full_name': 'Melanoma (MEL)',
-        'description': 'Most dangerous skin cancer. Can spread rapidly. Requires immediate medical attention.',
-        'risk': 'Critical',
-        'color': '#8B0000' # Dark Red/Maroon
-    },
-    'nv': {
-        'full_name': 'Melanocytic Nevi (NV)',
-        'description': 'Common moles. Generally benign but should be monitored for changes.',
-        'risk': 'Low',
-        'color': '#98FB98' # Pale Green
-    },
-    'scc': {
-        'full_name': 'Squamous Cell Carcinoma (SCC)',
-        'description': 'Second most common skin cancer. Can spread if untreated. Requires treatment.',
-        'risk': 'High',
-        'color': '#FF6347' # Tomato Red
-    },
-    'vasc': {
-        'full_name': 'Vascular Lesions (VASC)',
-        'description': 'Blood vessel abnormalities. Usually benign (e.g., cherry angiomas, hemangiomas).',
-        'risk': 'Low',
-        'color': '#DDA0DD' # Plum
-    }
+    'akiec': {
+        'full_name': 'Actinic Keratoses (AKIEC)',
+        'description': 'Pre-cancerous lesions caused by sun damage. Requires monitoring and treatment.',
+        'risk': 'Medium',
+        'color': '#FFA500'  # Orange
+    },
+    'bcc': {
+        'full_name': 'Basal Cell Carcinoma (BCC)',
+        'description': 'Most common skin cancer. Slow-growing, rarely spreads, highly treatable.',
+        'risk': 'High',
+        'color': '#FF4444'  # Bright Red
+    },
+    'bkl': {
+        'full_name': 'Benign Keratosis (BKL)',
+        'description': 'Non-cancerous skin growth. Generally harmless but may be removed for cosmetic reasons.',
+        'risk': 'Low',
+        'color': '#90EE90'  # Light Green
+    },
+    'df': {
+        'full_name': 'Dermatofibroma (DF)',
+        'description': 'Benign fibrous nodule. Usually harmless and does not require treatment.',
+        'risk': 'Low',
+        'color': '#87CEEB'  # Sky Blue
+    },
+    'mel': {
+        'full_name': 'Melanoma (MEL)',
+        'description': 'Most dangerous skin cancer. Can spread rapidly. Requires immediate medical attention.',
+        'risk': 'Critical',
+        'color': '#8B0000'  # Dark Red/Maroon
+    },
+    'nv': {
+        'full_name': 'Melanocytic Nevi (NV)',
+        'description': 'Common moles. Generally benign but should be monitored for changes.',
+        'risk': 'Low',
+        'color': '#98FB98'  # Pale Green
+    },
+    'scc': {
+        'full_name': 'Squamous Cell Carcinoma (SCC)',
+        'description': 'Second most common skin cancer. Can spread if untreated. Requires treatment.',
+        'risk': 'High',
+        'color': '#FF6347'  # Tomato Red
+    },
+    'vasc': {
+        'full_name': 'Vascular Lesions (VASC)',
+        'description': 'Blood vessel abnormalities. Usually benign (e.g., cherry angiomas, hemangiomas).',
+        'risk': 'Low',
+        'color': '#DDA0DD'  # Plum
+    }
 }
 
 # -------------------------
