@@ -29,96 +29,93 @@ CLASS_INFO = {
 'full_name': 'Actinic Keratoses (AKIEC)',
 'description': 'Pre-cancerous lesions caused by sun damage. Requires monitoring and treatment.',
 'risk': 'Medium',
-'color': '#FFA500'  # Orange
+'color': '#FFA500'  # Orange
 },
 'bcc': {
 'full_name': 'Basal Cell Carcinoma (BCC)',
 'description': 'Most common skin cancer. Slow-growing, rarely spreads, highly treatable.',
 'risk': 'High',
-'color': '#FF4444'  # Bright Red
+'color': '#FF4444'  # Bright Red
 },
 'bkl': {
 'full_name': 'Benign Keratosis (BKL)',
 'description': 'Non-cancerous skin growth. Generally harmless but may be removed for cosmetic reasons.',
 'risk': 'Low',
-'color': '#90EE90'  # Light Green
+'color': '#90EE90'  # Light Green
 },
 'df': {
 'full_name': 'Dermatofibroma (DF)',
 'description': 'Benign fibrous nodule. Usually harmless and does not require treatment.',
 'risk': 'Low',
-'color': '#87CEEB'  # Sky Blue
+'color': '#87CEEB'  # Sky Blue
 },
 'mel': {
 'full_name': 'Melanoma (MEL)',
 'description': 'Most dangerous skin cancer. Can spread rapidly. Requires immediate medical attention.',
 'risk': 'Critical',
-'color': '#8B0000'  # Dark Red/Maroon
+'color': '#8B0000'  # Dark Red/Maroon
 },
 'nv': {
 'full_name': 'Melanocytic Nevi (NV)',
 'description': 'Common moles. Generally benign but should be monitored for changes.',
 'risk': 'Low',
-'color': '#98FB98'  # Pale Green
+'color': '#98FB98'  # Pale Green
 },
 'scc': {
 'full_name': 'Squamous Cell Carcinoma (SCC)',
 'description': 'Second most common skin cancer. Can spread if untreated. Requires treatment.',
 'risk': 'High',
-'color': '#FF6347'  # Tomato Red
+'color': '#FF6347'  # Tomato Red
 },
 'vasc': {
 'full_name': 'Vascular Lesions (VASC)',
 'description': 'Blood vessel abnormalities. Usually benign (e.g., cherry angiomas, hemangiomas).',
 'risk': 'Low',
-'color': '#DDA0DD'  # Plum
+'color': '#DDA0DD'  # Plum
 }
 }
 
 # -------------------------
-# Custom CSS for Professional Look (NEW)
+# Custom CSS for Professional Look (MODIFIED)
 # -------------------------
 
-def set_background(image_url):
-"""Sets the background image and applies a dark-themed style."""
+def set_theme(background_color='#0E1117'): # Use a standard dark theme color
+"""Sets a consistent dark-themed style without a background image."""
 css = f"""
-   <style>
-   /* 1. Global Background Image and Attachment */
-   .stApp {{
-       background-image: url("{image_url}");
-       background-size: cover;
-       background-attachment: fixed;
-       background-repeat: no-repeat;
-       background-position: center;
-   }}
-   
-   /* 2. Main Content Container Overlay for Readability */
-   .main .block-container {{
-       background-color: rgba(18, 18, 18, 0.6); /* Semi-transparent dark overlay */
-       padding-top: 4rem;
-       padding-right: 4rem;
-       padding-left: 4rem;
-       padding-bottom: 4rem;
-       border-radius: 12px;
-   }}
-   
-   /* 3. Text and Header Colors for Dark Theme */
-   h1, h2, h3, h4, .stMarkdown, .stText, label, p, .css-1456l0p, .css-1dp5vir {{
-       color: #F0F2F6 !important; 
-   }}
-   
-   /* 4. Sidebar Contrast */
-   [data-testid="stSidebar"] {{
-       background-color: rgba(30, 30, 30, 0.95);
-       color: #F0F2F6;
-   }}
-   
-   /* 5. Custom Horizontal Rule for better separation */
-   hr {{
-       border-top: 1px solid #333;
-   }}
-   </style>
-   """
+   <style>
+   /* 1. Global Background Color (No Image) */
+   .stApp {{
+       background-color: {background_color}; /* Set a solid background color */
+       background-image: none; /* Crucial: Remove background image property */
+   }}
+   
+   /* 2. Main Content Container Overlay for Readability - Adjusted Opacity */
+   .main .block-container {{
+       background-color: rgba(18, 18, 18, 0.8); /* Slightly transparent dark overlay */
+       padding-top: 4rem;
+       padding-right: 4rem;
+       padding-left: 4rem;
+       padding-bottom: 4rem;
+       border-radius: 12px;
+   }}
+   
+   /* 3. Text and Header Colors for Dark Theme */
+   h1, h2, h3, h4, .stMarkdown, .stText, label, p, .css-1456l0p, .css-1dp5vir {{
+       color: #F0F2F6 !important; 
+   }}
+   
+   /* 4. Sidebar Contrast */
+   [data-testid="stSidebar"] {{
+       background-color: rgba(30, 30, 30, 0.95);
+       color: #F0F2F6;
+   }}
+   
+   /* 5. Custom Horizontal Rule for better separation */
+   hr {{
+       border-top: 1px solid #333;
+   }}
+   </style>
+   """
 st.markdown(css, unsafe_allow_html=True)
 
 
@@ -178,7 +175,7 @@ if image.mode != 'RGB':
 image = image.convert('RGB')
 
 transform = get_transform()
-tensor = transform(image).unsqueeze(0) 
+tensor = transform(image).unsqueeze(0) 
 return tensor
 
 def predict_with_tta(model: torch.nn.Module, image_tensor: torch.Tensor, use_tta: bool = True) -> np.ndarray:
@@ -242,7 +239,7 @@ def create_risk_indicator(top_class: str):
 risk = CLASS_INFO[top_class]['risk']
 
 risk_colors = {
-'Low': '#4CAF50', 
+'Low': '#4CAF50', 
 'Medium': '#FFC107',
 'High': '#FF5722',
 'Critical': '#F44336'
@@ -251,10 +248,10 @@ risk_colors = {
 color = risk_colors.get(risk, '#808080')
 
 html = f"""
-   <div style="padding: 20px; border-radius: 10px; background-color: {color}; color: white; text-align: center; margin-bottom: 20px;">
-       <h2 style="margin: 0; color: white !important;">Risk Level: {risk}</h2>
-   </div>
-   """
+   <div style="padding: 20px; border-radius: 10px; background-color: {color}; color: white; text-align: center; margin-bottom: 20px;">
+       <h2 style="margin: 0; color: white !important;">Risk Level: {risk}</h2>
+   </div>
+   """
 return html, risk
 
 # -------------------------
@@ -269,21 +266,21 @@ layout="wide",
 initial_sidebar_state="expanded"
 )
 
-# --- APPLY CUSTOM BACKGROUND AND THEME (NEW) ---
-SPACE_IMAGE_URL = "https://raw.githubusercontent.com/tph110/streamlit5/c4345f1bbf81b7944b6ed1672e75b5557b53a50c/spaceimage.jpg"
-set_background(SPACE_IMAGE_URL)
+# --- APPLY CUSTOM BACKGROUND AND THEME (MODIFIED) ---
+# Removed SPACE_IMAGE_URL
+set_theme() # Call the modified function without an image URL
 # ---------------------------------------------
 
 # Header (Updated for a cleaner, modern look)
 st.markdown(
 """
-       # 🔬 Dermoscopic Image Analyser
-       <p style='font-size: 18px; color: #aaa; margin-top: -10px;'>
-        8-Class Dermoscopic Image Classification | EfficientNet-B4 (ISIC2019) | Macro F1 84.5% | Macro AUC 98.4% | Balanced Accuracy 83.6%
-        8-Class Dermoscopic Image Classification | EfficientNet-B4 trained on 25,000 images (ISIC2019) | Macro F1 84.5% | Macro AUC 98.4% | Balanced Accuracy 83.6%
-       </p>
-       <hr>
-       """,
+       # 🔬 Dermoscopic Image Analyser
+       <p style='font-size: 18px; color: #aaa; margin-top: -10px;'>
+        8-Class Dermoscopic Image Classification | EfficientNet-B4 (ISIC2019) | Macro F1 84.5% | Macro AUC 98.4% | Balanced Accuracy 83.6%
+        8-Class Dermoscopic Image Classification | EfficientNet-B4 trained on 25,000 images (ISIC2019) | Macro F1 84.5% | Macro AUC 98.4% | Balanced Accuracy 83.6%
+       </p>
+       <hr>
+       """,
 unsafe_allow_html=True
 )
 
@@ -291,20 +288,20 @@ unsafe_allow_html=True
 with st.sidebar:
 st.header("ℹ️ Information")
 st.markdown("""
-       This AI model classifies dermoscopic images into **8 categories**, categorizing them as Malignant, Pre-cancerous, or Benign.
-       """)
+       This AI model classifies dermoscopic images into **8 categories**, categorizing them as Malignant, Pre-cancerous, or Benign.
+       """)
 
 st.subheader("Classification Categories")
 st.markdown("""
-       - **Critical/High Risk:** MEL, BCC, SCC
-       - **Medium Risk:** AKIEC
-       - **Low Risk:** NV, BKL, DF, VASC
-       """)
+       - **Critical/High Risk:** MEL, BCC, SCC
+       - **Medium Risk:** AKIEC
+       - **Low Risk:** NV, BKL, DF, VASC
+       """)
 
 st.divider()
 
 st.header("⚙️ Settings")
-use_tta = st.checkbox("Use Test-Time Augmentation", value=True, 
+use_tta = st.checkbox("Use Test-Time Augmentation", value=True, 
 help="Improves accuracy but takes slightly longer")
 show_all_probabilities = st.checkbox("Show detailed probability chart", value=True)
 
@@ -318,10 +315,10 @@ st.metric("Balanced Accuracy", "0.836")
 st.divider()
 
 st.warning("""
-       ⚠️ **Medical Disclaimer**
-       
-       This tool is for educational and research purposes only. It is **NOT** a substitute for professional medical advice, diagnosis, or treatment. Always consult a qualified dermatologist.
-       """)
+       ⚠️ **Medical Disclaimer**
+       
+       This tool is for educational and research purposes only. It is **NOT** a substitute for professional medical advice, diagnosis, or treatment. Always consult a qualified dermatologist.
+       """)
 
 # Load model
 model = load_model()
@@ -334,7 +331,7 @@ return
 st.subheader("📤 Upload Dermoscopic Image")
 
 uploaded_file = st.file_uploader(
-"Choose a dermoscopic image...", 
+"Choose a dermoscopic image...", 
 type=['jpg', 'jpeg', 'png'],
 help="Upload a high-quality dermoscopic image for classification"
 )
@@ -385,7 +382,7 @@ st.markdown(f"**Description:** {CLASS_INFO[top_class]['description']}")
 # Show probability chart
 if show_all_probabilities:
 st.subheader("📊 Detailed Probability Distribution")
-fig = create_probability_chart(probabilities, CLASS_NAMES) 
+fig = create_probability_chart(probabilities, CLASS_NAMES) 
 st.plotly_chart(fig, use_container_width=True)
 
 # Clinical recommendations
@@ -393,34 +390,34 @@ st.subheader("🩺 Clinical Recommendations")
 
 if risk_level in ['Critical', 'High']:
 st.error(f"""
-               **⚠️ URGENT: This lesion shows characteristics of {CLASS_INFO[top_class]['full_name']}**
-               
-               **Recommended Actions:**
-               - Schedule an appointment with a **dermatologist immediately**
-               - Do not delay - early detection is crucial
-               - Bring this analysis to your appointment
-               - Consider getting a biopsy if recommended by your doctor
-               """)
+               **⚠️ URGENT: This lesion shows characteristics of {CLASS_INFO[top_class]['full_name']}**
+               
+               **Recommended Actions:**
+               - Schedule an appointment with a **dermatologist immediately**
+               - Do not delay - early detection is crucial
+               - Bring this analysis to your appointment
+               - Consider getting a biopsy if recommended by your doctor
+               """)
 elif risk_level == 'Medium':
 st.warning(f"""
-               **⚡ This lesion shows characteristics of {CLASS_INFO[top_class]['full_name']}**
-               
-               **Recommended Actions:**
-               - Schedule a dermatologist appointment within **1-2 weeks**
-               - Monitor for any changes in size, color, or shape
-               - Consider treatment options with your doctor
-               - Protect from sun exposure
-               """)
+               **⚡ This lesion shows characteristics of {CLASS_INFO[top_class]['full_name']}**
+               
+               **Recommended Actions:**
+               - Schedule a dermatologist appointment within **1-2 weeks**
+               - Monitor for any changes in size, color, or shape
+               - Consider treatment options with your doctor
+               - Protect from sun exposure
+               """)
 else:
 st.info(f"""
-               **✓ This lesion appears to be {CLASS_INFO[top_class]['full_name']}**
-               
-               **Recommended Actions:**
-               - Continue regular skin monitoring
-               - Annual dermatology check-ups recommended
-               - Report any changes to your doctor
-               - Practice sun safety
-               """)
+               **✓ This lesion appears to be {CLASS_INFO[top_class]['full_name']}**
+               
+               **Recommended Actions:**
+               - Continue regular skin monitoring
+               - Annual dermatology check-ups recommended
+               - Report any changes to your doctor
+               - Practice sun safety
+               """)
 
 # Top 3 predictions
 st.subheader("🔍 Top 3 Predictions")
@@ -433,12 +430,12 @@ prob = probabilities[idx]
 
 with cols[i]:
 st.markdown(f"""
-                   <div style="padding: 15px; border-radius: 10px; border: 2px solid {CLASS_INFO[class_name]['color']};">
-                       <h4>#{i+1}: {CLASS_INFO[class_name]['full_name']}</h4>
-                       <p><strong>Confidence:</strong> {prob*100:.1f}%</p>
-                       <p><strong>Risk:</strong> {CLASS_INFO[class_name]['risk']}</p>
-                   </div>
-                   """, unsafe_allow_html=True)
+                   <div style="padding: 15px; border-radius: 10px; border: 2px solid {CLASS_INFO[class_name]['color']};">
+                       <h4>#{i+1}: {CLASS_INFO[class_name]['full_name']}</h4>
+                       <p><strong>Confidence:</strong> {prob*100:.1f}%</p>
+                       <p><strong>Risk:</strong> {CLASS_INFO[class_name]['risk']}</p>
+                   </div>
+                   """, unsafe_allow_html=True)
 
 except Exception as e:
 st.error(f"⚠️ An error occurred while processing the image.")
@@ -448,25 +445,25 @@ st.info("Please ensure the image is a valid JPG/PNG file and try again.")
 else:
 # Instructions when no image is uploaded
 st.info("""
-       👆 **Please upload a dermoscopic image to begin analysis**
-       
-       **Tips for best results:** Use high-quality dermoscopic images with good focus.
-       """)
+       👆 **Please upload a dermoscopic image to begin analysis**
+       
+       **Tips for best results:** Use high-quality dermoscopic images with good focus.
+       """)
 
 # Example images section
 st.subheader("📸 What is a dermoscopic image?")
 st.markdown("""
-       Dermoscopic images are captured using a **dermatoscope**, a specialized tool that uses magnification and polarized light to examine skin patterns beneath the surface, enabling more accurate diagnoses.
-       """)
+       Dermoscopic images are captured using a **dermatoscope**, a specialized tool that uses magnification and polarized light to examine skin patterns beneath the surface, enabling more accurate diagnoses.
+       """)
 
 # Footer
 st.markdown("---")
 st.markdown("""
-   <div style="text-align: center; color: #999; padding: 20px;">
-       <p><strong>Model:</strong> EfficientNet-B4 | Trained on 25,331 ISIC2019 images | 8-class classification</p>
-       <p><strong>Developed by:</strong> Dr Tom Hutchinson, Oxford, England | For educational and research purposes</p>
-   </div>
-   """, unsafe_allow_html=True)
+   <div style="text-align: center; color: #999; padding: 20px;">
+       <p><strong>Model:</strong> EfficientNet-B4 | Trained on 25,331 ISIC2019 images | 8-class classification</p>
+       <p><strong>Developed by:</strong> Dr Tom Hutchinson, Oxford, England | For educational and research purposes</p>
+   </div>
+   """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
 main()
