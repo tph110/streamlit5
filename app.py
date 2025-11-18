@@ -287,15 +287,23 @@ def main():
     )
 
     with st.sidebar:
-        # Load and display logo
+        # Load and display logo - try local file first, then fallback to URL
+        logo_image = None
         try:
-            logo_url = "https://raw.githubusercontent.com/tph110/streamlit5/ae1588fad92118dc81bd14493d147c21b04d27af/Logo.png"
-            logo_response = requests.get(logo_url, timeout=10)
-            logo_response.raise_for_status()
-            logo_image = Image.open(BytesIO(logo_response.content))
+            # Try local file first
+            logo_image = Image.open("Logo.png")
+        except (FileNotFoundError, IOError):
+            try:
+                # Fallback to URL if local file not found
+                logo_url = "https://raw.githubusercontent.com/tph110/streamlit5/ae1588fad92118dc81bd14493d147c21b04d27af/Logo.png"
+                logo_response = requests.get(logo_url, timeout=10)
+                logo_response.raise_for_status()
+                logo_image = Image.open(BytesIO(logo_response.content))
+            except Exception as e:
+                st.warning(f"Could not load logo: {e}")
+        
+        if logo_image is not None:
             st.image(logo_image, use_container_width=True)
-        except Exception as e:
-            st.warning(f"Could not load logo: {e}")
 
         st.header("ℹ️ Information")
         st.markdown("""
