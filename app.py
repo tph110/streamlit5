@@ -287,14 +287,14 @@ def main():
     with st.sidebar:
         st.header("ℹ️ Information")
         st.markdown("""
-        This AI model classifies dermoscopic images into **8 categories**, categorizing them as Malignant, Pre-cancerous, or Benign.
+        This AI model classifies medical dermoscopic images of skin lesions into **8 categories**.
         """)
 
         st.subheader("Classification Categories")
         st.markdown("""
-        - **Critical/High Risk:** MEL, BCC, SCC
-        - **Medium Risk:** AKIEC
-        - **Low Risk:** NV, BKL, DF, VASC
+        - **Critical/High Risk:** Melanoma, BCC, SCC
+        - **Medium Risk:** Actinic Keratosis
+        - **Low Risk:** Naevus, Benign Keratosis, Dermatofibroma, Vascular
         """)
 
         st.divider()
