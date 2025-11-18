@@ -288,12 +288,9 @@ def main():
     
     # Sidebar
     with st.sidebar:
-         
-        st.image(
-        "https://raw.githubusercontent.com/tph110/streamlit5/ae1588fad92118dc81bd14493d147c21b04d27af/Logo.png",
-        use_container_width=True
-        )    
 
+        st.image("https://raw.githubusercontent.com/tph110/streamlit5/ae1588fad92118dc81bd14493d147c21b04d27af/Logo.png", use_container_width=True)
+    
         st.header("ℹ️ Information")
         st.markdown("""
         This AI model classifies dermoscopic images into **8 categories**, categorizing them as Malignant, Pre-cancerous, or Benign.
