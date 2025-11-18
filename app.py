@@ -274,7 +274,7 @@ def main():
     # Header (Updated for a cleaner, modern look)
     st.markdown(
         """
-        # 🔬 Dermoscopic Image Analyser
+        # 🔬 Skin Scanner Dermoscopic Photo Analyser
         <p style='font-size: 18px; color: #aaa; margin-top: -10px;'>
         8-Class Dermoscopic Image Classification | EfficientNet-B4 trained on 25,000 images (ISIC2019) | Macro F1 84.5% | Macro AUC 98.4% | Balanced Accuracy 83.6%
         </p>
