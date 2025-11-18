@@ -449,7 +449,7 @@ def main():
         st.info("""
         👆 **Please upload a dermoscopic image to begin analysis**
         
-        **Tips for best results:** Use high-quality dermoscopic images with good focus.
+        **Tips for best results:** Use high-quality dermoscopic images with good focus. Not validated for mucousal or subungual lesions.
         """)
         
         # Example images section
