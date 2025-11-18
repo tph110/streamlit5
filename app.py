@@ -303,7 +303,7 @@ def main():
                 st.warning(f"Could not load logo: {e}")
         
         if logo_image is not None:
-            st.image(logo_image, use_container_width=True)
+            st.image(logo_image, use_column_width=True)
 
         st.header("ℹ️ Information")
         st.markdown("""
