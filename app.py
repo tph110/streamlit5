@@ -460,7 +460,7 @@ def main():
     st.markdown("""
     <div style="text-align: center; color: #999; padding: 20px;">
         <p><strong>Model:</strong> EfficientNet-B4 | Trained on 25,331 ISIC2019 images | 8-class classification</p>
-        <p><strong>Developed by:</strong> Dr Tom Hutchinson, Oxford, England | For educational and research purposes</p>
+        <p><strong>Developed by:</strong> Dr Tom Hutchinson, Oxford, England | For educational and research purposes only</p>
     </div>
     """, unsafe_allow_html=True)
 
