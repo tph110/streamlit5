@@ -260,7 +260,7 @@ def create_risk_indicator(top_class: str):
 def main():
     # Page configuration (must be first)
     st.set_page_config(
-        page_title="Dermoscan AI Tool",
+        page_title="Skin Scanner AI Tool",
         page_icon="🔬",
         layout="wide",
         initial_sidebar_state="expanded"
