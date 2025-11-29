@@ -318,7 +318,7 @@ def main():
                                 <div class="gradcam-reveal"></div>
                             </div>
                             <div class="gradcam-caption">
-                                AI Heatmap Imaging
+                                AI Heatmap Image
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
