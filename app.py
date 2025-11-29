@@ -264,7 +264,6 @@ def main():
 
     with st.sidebar:
         st.header("ℹ️ Information")
-        st.markdown("Skin Scanner analyses dermoscopic images of skin lesions, predicts the risk of malignancy and classifies the lesions into **8 categories**.")
         st.divider()
         st.warning("⚠️ **Medical Disclaimer**\n\nThis tool is for educational and research purposes only. It is not a substitute for professional medical advice, diagnosis, or treatment. Always consult a qualified healthcare professional.")
         st.divider()
